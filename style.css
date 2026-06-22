@@ -52,7 +52,9 @@ body{
     radial-gradient(ellipse 900px 500px at 50% -10%, rgba(242,183,5,.06), transparent 60%);
 }
 
-/* torn / taped edge strip across the very top of the page — the signature element */
+/* ============================================================
+   TAPE EDGE
+   ============================================================ */
 .tape-edge{
   height: 14px;
   background: repeating-linear-gradient(
@@ -85,9 +87,7 @@ body{
   color: var(--cream);
   line-height: 1;
 }
-.brand-mark{
-  color: var(--amber);
-}
+.brand-mark{ color: var(--amber); }
 .brand-dot{ color: var(--amber); }
 .tagline{
   margin: 4px 0 0;
@@ -106,13 +106,15 @@ body{
   color: var(--cream);
   cursor:pointer;
   transition: background .15s ease, transform .15s ease;
+  flex-shrink: 0;
 }
 .icon-btn:hover{ background: var(--bg-panel-raised); }
 .icon-btn:active{ transform: scale(.94); }
 .icon-btn:focus-visible{ outline: 2px solid var(--amber); outline-offset: 2px; }
+.icon-btn.danger:hover{ background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
 
 /* ============================================================
-   TABS — styled like cue cards clipped to a mic stand
+   TABS
    ============================================================ */
 .tabs{
   max-width: 640px;
@@ -175,13 +177,16 @@ main{
   color: var(--cream);
 }
 
+/* ============================================================
+   FORM FIELDS
+   ============================================================ */
 .field{ margin-bottom: 16px; }
 .field:last-child{ margin-bottom: 0; }
 .field-row{
   display:flex;
   gap: 12px;
 }
-.field-row .field{ flex: 1; }
+.field-row .field{ flex: 1; min-width: 0; }
 .field-date{ max-width: 160px; flex: none; }
 
 label{
@@ -204,8 +209,9 @@ label .hint{
   letter-spacing: 0;
 }
 
+/* Global input styles — NOTE: never set width:100% here,
+   set it on wrappers instead so flex children calculate correctly */
 input[type=text], input[type=date], input[type=url], textarea{
-  width:100%;
   background: var(--bg-input);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -214,13 +220,25 @@ input[type=text], input[type=date], input[type=url], textarea{
   font-size: 15px;
   padding: 11px 12px;
   transition: border-color .15s ease, box-shadow .15s ease;
+  /* do NOT set width:100% globally — let container control width */
 }
 textarea{
   font-family: var(--mono);
   font-size: 14px;
   line-height: 1.6;
   resize: vertical;
+  width: 100%;
+  display: block;
 }
+
+/* Fields that are NOT inside a flex row get full width */
+.field > input[type=text],
+.field > input[type=date],
+.field > input[type=url] {
+  width: 100%;
+  display: block;
+}
+
 input::placeholder, textarea::placeholder{ color: #5C5749; }
 input:focus, textarea:focus{
   outline: none;
@@ -229,6 +247,56 @@ input:focus, textarea:focus{
 }
 input[type=date]{ color-scheme: dark; }
 
+/* ============================================================
+   SEARCH ROW — the key mobile fix
+   ============================================================ */
+.search-row{
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+/* the input inside search-row must NOT be width:100% — let flex handle it */
+.search-row input[type=text]{
+  flex: 1;
+  min-width: 0;        /* critical: prevents flex item from overflowing */
+  width: auto;         /* override any inherited width:100% */
+  display: block;
+}
+
+/* input with a clear × button positioned inside it */
+.input-clearable{
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.input-clearable input{
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  padding-right: 36px;
+}
+.btn-clear-inline{
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color .12s ease;
+}
+.btn-clear-inline:hover{ color: var(--cream); }
+.btn-clear-inline[hidden]{ display: none; }
+
+/* ============================================================
+   PARSE STATUS BADGE
+   ============================================================ */
 .parse-status{ margin-top: 4px; }
 .badge{
   display:inline-block;
@@ -247,7 +315,9 @@ input[type=date]{ color-scheme: dark; }
   border-color: var(--amber);
 }
 
-/* setlist preview — taped cue-sheet card with a torn top edge */
+/* ============================================================
+   SETLIST PREVIEW — torn cue-sheet card
+   ============================================================ */
 .preview-card{
   padding-top: 22px;
   clip-path: polygon(
@@ -265,8 +335,8 @@ input[type=date]{ color-scheme: dark; }
 .setlist-preview li{
   counter-increment: song;
   display:flex;
-  align-items:baseline;
-  gap: 12px;
+  align-items:center;
+  gap: 10px;
   padding: 9px 0;
   border-bottom: 1px dashed var(--line);
   font-size: 15.5px;
@@ -276,18 +346,54 @@ input[type=date]{ color-scheme: dark; }
   content: counter(song);
   font-family: var(--mono);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--bg-stage);
   background: var(--amber);
-  min-width: 24px;
-  height: 24px;
+  min-width: 22px;
+  height: 22px;
   border-radius: 50%;
   display:flex; align-items:center; justify-content:center;
   flex-shrink:0;
 }
 
+/* editable song item */
+.setlist-preview li.editing input{
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm);
+  color: var(--cream);
+  font-size: 15px;
+  padding: 4px 8px;
+  width: auto;
+  min-width: 0;
+}
+.setlist-preview li .song-text{ flex: 1; }
+.setlist-preview li .song-actions{
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.setlist-preview li:hover .song-actions{ opacity: 1; }
+.setlist-preview li.editing .song-actions{ opacity: 1; }
+.song-btn{
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: color .12s ease, background .12s ease;
+}
+.song-btn:hover{ color: var(--cream); background: var(--bg-panel-raised); }
+.song-btn.del:hover{ color: var(--danger); }
+.song-btn.ok{ color: var(--ok); }
+
 /* ============================================================
-   BUTTONS
+   ACTIONS ROW
    ============================================================ */
 .actions{
   display:flex;
@@ -295,6 +401,15 @@ input[type=date]{ color-scheme: dark; }
   gap: 10px;
   margin-bottom: 6px;
 }
+.actions-secondary{
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
 .btn{
   appearance:none;
   border: none;
@@ -310,6 +425,7 @@ input[type=date]{ color-scheme: dark; }
   transition: transform .12s ease, filter .15s ease, background .15s ease;
   flex: 1 1 auto;
   justify-content:center;
+  white-space: nowrap;
 }
 .btn:active{ transform: scale(.97); }
 .btn:disabled{ opacity:.4; cursor: not-allowed; }
@@ -335,11 +451,19 @@ input[type=date]{ color-scheme: dark; }
 }
 .btn-ghost:hover:not(:disabled){ color: var(--cream); border-color: var(--muted); }
 
+.btn-danger{
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger-soft);
+  flex: 0 1 auto;
+}
+.btn-danger:hover:not(:disabled){ background: var(--danger-soft); }
+
 .btn-compact{ flex: none; padding: 11px 16px; }
 
-.search-row{ display:flex; gap: 10px; }
-.search-row input{ flex:1; }
-
+/* ============================================================
+   STATUS MESSAGE
+   ============================================================ */
 .status-msg{
   font-family: var(--mono);
   font-size: 13px;
@@ -351,26 +475,115 @@ input[type=date]{ color-scheme: dark; }
 .status-msg.busy{ color: var(--amber-dim); }
 
 /* ============================================================
-   RESULTS LISTS (busca / histórico)
+   RESULTS LISTS (buscar / histórico)
    ============================================================ */
 .results-list{ display:flex; flex-direction:column; gap: 10px; }
+
 .result-item{
   background: var(--bg-panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
+  padding: 0;
+  overflow: hidden;
+  transition: border-color .15s ease;
+}
+.result-item:hover{ border-color: var(--amber-dim); }
+
+.result-item-header{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
   padding: 13px 14px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.result-item .r-top{
-  display:flex; justify-content:space-between; align-items:baseline; gap: 10px;
+.result-item-header:active{ background: var(--bg-panel-raised); }
+
+.result-meta{
+  display:flex; flex-direction: column; gap: 3px; flex:1; min-width: 0;
+}
+.r-top{
+  display:flex; justify-content:space-between; align-items:baseline; gap: 8px;
   font-family: var(--mono); font-size: 12px; color: var(--muted);
+  flex-wrap: wrap;
 }
-.result-item .r-song{
-  font-size: 15.5px; font-weight: 600; margin-top: 4px; color: var(--cream);
+.r-song{
+  font-size: 15.5px; font-weight: 600; color: var(--cream);
 }
-.result-item .r-order{
+.r-qtd{
+  font-family: var(--mono); font-size: 12px; color: var(--amber-dim);
+}
+.r-order{
   color: var(--amber);
   font-family: var(--mono);
+  margin-right: 6px;
+  flex-shrink: 0;
 }
+
+.expand-icon{
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform .2s ease;
+}
+.result-item.open .expand-icon{ transform: rotate(180deg); }
+
+/* expandable setlist detail inside a historico card */
+.show-detail{
+  border-top: 1px solid var(--line);
+  background: var(--bg-input);
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .25s ease;
+}
+.result-item.open .show-detail{
+  max-height: 2000px;
+}
+.show-detail-loading{
+  padding: 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+.show-songs{
+  list-style: none;
+  margin: 0; padding: 8px 0;
+  counter-reset: ss;
+}
+.show-songs li{
+  counter-increment: ss;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 14.5px;
+  border-bottom: 1px solid var(--line);
+}
+.show-songs li:last-child{ border-bottom: none; }
+.show-songs li::before{
+  content: counter(ss);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bg-stage);
+  background: var(--amber-dim);
+  min-width: 20px; height: 20px;
+  border-radius: 50%;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink: 0;
+}
+.show-detail-actions{
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 14px;
+}
+.show-detail-actions .btn{
+  font-size: 13px;
+  padding: 9px 14px;
+  flex: 1;
+}
+
 .empty-state{
   text-align:center;
   color: var(--muted);
@@ -438,7 +651,7 @@ input[type=date]{ color-scheme: dark; }
 }
 
 /* ============================================================
-   PRINT VIEW — used only by window.print()
+   PRINT
    ============================================================ */
 .print-area{ display:none; }
 
@@ -483,4 +696,6 @@ input[type=date]{ color-scheme: dark; }
   .brand{ font-size: 32px; }
   .actions{ flex-direction: column; }
   .btn{ width: 100%; }
+  .field-row{ flex-direction: column; }
+  .field-date{ max-width: none; }
 }
