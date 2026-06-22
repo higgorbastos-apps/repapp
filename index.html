@@ -6,15 +6,12 @@
 <title>Repertório — Atualizador de Setlist</title>
 <meta name="description" content="Cole a lista do repertório, salve no banco de músicas e leve o setlist em PDF para o palco.">
 <meta name="theme-color" content="#15140F">
-
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -57,7 +54,7 @@
       <div class="field">
         <label for="inputLista">
           Cole a lista numerada do repertório
-          <span class="hint">aceita "1. música", "1) música", "- música"...</span>
+          <span class="hint">aceita "1. música", "1) música", "- música"…</span>
         </label>
         <textarea id="inputLista" rows="10" placeholder="1. Evidências&#10;2. Trem das Onze&#10;3. Garota de Ipanema&#10;4. ..."></textarea>
       </div>
@@ -67,24 +64,33 @@
       </div>
     </div>
 
-    <!-- live preview of the parsed setlist, styled like a cue sheet taped to the floor -->
+    <!-- live preview -->
     <div class="card preview-card" id="previewCard" hidden>
-      <h2 class="card-title">Pré-visualização do setlist</h2>
+      <h2 class="card-title">Pré-visualização — edite se precisar</h2>
       <ol class="setlist-preview" id="setlistPreview"></ol>
     </div>
 
+    <!-- primary action -->
     <div class="actions">
       <button id="btnSalvar" class="btn btn-primary" disabled>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
         Atualizar repertório
       </button>
+    </div>
+
+    <!-- secondary actions -->
+    <div class="actions" style="margin-top:-2px;">
       <button id="btnPdf" class="btn btn-secondary" disabled>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
         Baixar PDF
       </button>
-      <button id="btnImprimir" class="btn btn-ghost" disabled>
+      <button id="btnImprimir" class="btn btn-secondary" disabled>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
         Imprimir
+      </button>
+      <button id="btnLimpar" class="btn btn-danger" title="Limpar formulário">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+        Limpar
       </button>
     </div>
 
@@ -96,8 +102,14 @@
     <div class="card">
       <div class="field">
         <label for="inputBusca">Buscar música no banco de repertórios</label>
+        <!-- search-row: flex container — input uses flex:1, button is flex:none -->
         <div class="search-row">
-          <input type="text" id="inputBusca" placeholder="Ex: Evidências" autocomplete="off">
+          <div class="input-clearable">
+            <input type="text" id="inputBusca" placeholder="Ex: Evidências" autocomplete="off">
+            <button class="btn-clear-inline" id="btnLimparBusca" aria-label="Limpar busca" hidden>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
           <button id="btnBuscar" class="btn btn-primary btn-compact">Buscar</button>
         </div>
       </div>
@@ -124,7 +136,6 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <h2 id="modalTitle">Conexão com a planilha</h2>
     <p class="modal-desc">Cole aqui a URL do seu Web App do Google Apps Script e o token secreto definido no <code>Code.gs</code>. Isso fica salvo só neste dispositivo — nunca no código publicado.</p>
-
     <div class="field">
       <label for="cfgUrl">URL do Web App (Apps Script)</label>
       <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
@@ -133,7 +144,6 @@
       <label for="cfgToken">Token secreto</label>
       <input type="text" id="cfgToken" placeholder="defina o mesmo valor de SECRET_TOKEN no Code.gs">
     </div>
-
     <div class="modal-actions">
       <button id="btnCfgSalvar" class="btn btn-primary">Salvar conexão</button>
       <button id="btnCfgFechar" class="btn btn-ghost">Fechar</button>
@@ -142,7 +152,6 @@
   </div>
 </div>
 
-<!-- printable view, only visible in @media print -->
 <div id="printArea" class="print-area"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
