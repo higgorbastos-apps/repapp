@@ -1,0 +1,516 @@
+'use strict';
+
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const CFG_KEY = 'repertorio_cfg_v1';
+function getConfig(){ try{ return JSON.parse(localStorage.getItem(CFG_KEY))||{url:'',token:''}; }catch{ return {url:'',token:''}; } }
+function setConfig(c){ localStorage.setItem(CFG_KEY,JSON.stringify(c)); }
+function isConfigured(){ const c=getConfig(); return !!(c.url&&c.token); }
+
+/* ============================================================
+   UTILS
+   ============================================================ */
+function escapeHtml(s){
+  const d=document.createElement('div'); d.textContent=s; return d.innerHTML;
+}
+function formatDataBR(iso){
+  const [y,m,d]=(iso||'').split('-');
+  return (d&&m&&y)?`${d}/${m}/${y}`:(iso||'');
+}
+function formatAnyDate(v){
+  const s=String(v||'');
+  const m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m?`${m[3]}/${m[2]}/${m[1]}`:s;
+}
+function parseLista(txt){
+  if(!txt) return [];
+  return txt.split('\n')
+    .map(l=>l.trim()).filter(l=>l.length>0)
+    .map(l=>l.replace(/^\s*(\d+\s*[.\)\-–:]?|[-*•▪︎])\s*/,'').trim())
+    .filter(l=>l.length>0);
+}
+
+/* ============================================================
+   STATE — cada música é um objeto { nome, tom, harmonia, bpm }
+   ============================================================ */
+let parsedSongs = []; // array of { nome, tom, harmonia, bpm }
+
+function songObj(nome){ return { nome, tom:'', harmonia:'', bpm:'' }; }
+
+/* ============================================================
+   TABS
+   ============================================================ */
+const tabs   = document.querySelectorAll('.tab');
+const panels = {
+  registrar: document.getElementById('tab-registrar'),
+  buscar:    document.getElementById('tab-buscar'),
+  historico: document.getElementById('tab-historico'),
+};
+tabs.forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    tabs.forEach(t=>{ t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+    btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+    Object.values(panels).forEach(p=>{ p.hidden=true; p.classList.remove('active'); });
+    const t=panels[btn.dataset.tab];
+    t.hidden=false; t.classList.add('active');
+    if(btn.dataset.tab==='historico') loadHistorico();
+  });
+});
+
+/* ============================================================
+   REGISTRAR
+   ============================================================ */
+const inputLocal     = document.getElementById('inputLocal');
+const inputData      = document.getElementById('inputData');
+const inputLista     = document.getElementById('inputLista');
+const parseCount     = document.getElementById('parseCount');
+const previewCard    = document.getElementById('previewCard');
+const setlistPreview = document.getElementById('setlistPreview');
+const btnSalvar      = document.getElementById('btnSalvar');
+const btnPdf         = document.getElementById('btnPdf');
+const btnImprimir    = document.getElementById('btnImprimir');
+const btnLimparForm  = document.getElementById('btnLimparForm');
+const statusMsg      = document.getElementById('statusMsg');
+
+inputData.valueAsDate = new Date();
+
+function setStatus(msg,type){
+  statusMsg.textContent=msg;
+  statusMsg.className='status-msg'+(type?' '+type:'');
+}
+
+/* ---- render preview ---- */
+function renderPreview(){
+  setlistPreview.innerHTML = parsedSongs.map((s,i)=>{
+    const hasMeta = s.tom||s.harmonia||s.bpm;
+    const badges  = [
+      s.tom      ? `<span class="meta-badge">🎵 ${escapeHtml(s.tom)}</span>`      : '',
+      s.harmonia ? `<span class="meta-badge">♭ ${escapeHtml(s.harmonia)}</span>`  : '',
+      s.bpm      ? `<span class="meta-badge">♩ ${escapeHtml(s.bpm)} BPM</span>`  : '',
+    ].join('');
+    return `
+    <li data-index="${i}">
+      <div class="song-main">
+        <span class="song-num">${i+1}</span>
+        <span class="song-text">${escapeHtml(s.nome)}</span>
+        <div class="song-actions">
+          <button class="song-btn" data-action="toggle-meta" data-index="${i}" title="Tom / Harmonia / BPM">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          </button>
+          <button class="song-btn" data-action="edit" data-index="${i}" title="Editar nome">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="song-btn del" data-action="delete" data-index="${i}" title="Remover">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      ${hasMeta ? `<div class="song-meta-badges">${badges}</div>` : ''}
+      <div class="song-meta" id="meta-${i}">
+        <div class="meta-field">
+          <label>Tom</label>
+          <input type="text" placeholder="Ex: C, Am" value="${escapeHtml(s.tom)}" data-meta="tom" data-index="${i}" maxlength="10">
+        </div>
+        <div class="meta-field">
+          <label>Harmonia</label>
+          <input type="text" placeholder="Ex: I-IV-V" value="${escapeHtml(s.harmonia)}" data-meta="harmonia" data-index="${i}" maxlength="30">
+        </div>
+        <div class="meta-field">
+          <label>BPM</label>
+          <input type="number" placeholder="Ex: 120" value="${escapeHtml(s.bpm)}" data-meta="bpm" data-index="${i}" min="1" max="300">
+        </div>
+      </div>
+    </li>`;
+  }).join('');
+}
+
+function updatePreview(){
+  const raw = parseLista(inputLista.value);
+  // preserve existing meta when re-parsing (match by position)
+  parsedSongs = raw.map((nome,i)=>{
+    const existing = parsedSongs[i];
+    return existing ? { ...existing, nome } : songObj(nome);
+  });
+  const n = parsedSongs.length;
+  parseCount.textContent = n===1?'1 música detectada':`${n} músicas detectadas`;
+  parseCount.classList.toggle('ready',n>0);
+  previewCard.hidden = n===0;
+  if(n>0) renderPreview();
+  else setlistPreview.innerHTML='';
+  const hasMeta = inputLocal.value.trim()&&inputData.value;
+  const ok = n>0&&hasMeta;
+  btnSalvar.disabled=btnPdf.disabled=btnImprimir.disabled=!ok;
+}
+
+inputLista.addEventListener('input',updatePreview);
+inputLocal.addEventListener('input',updatePreview);
+inputData.addEventListener('input',updatePreview);
+
+/* ---- delegate events on preview list ---- */
+setlistPreview.addEventListener('click',e=>{
+  const btn = e.target.closest('[data-action]');
+  if(!btn) return;
+  const idx    = parseInt(btn.dataset.index,10);
+  const action = btn.dataset.action;
+  const li     = setlistPreview.querySelector(`li[data-index="${idx}"]`);
+
+  if(action==='delete'){
+    parsedSongs.splice(idx,1);
+    rebuildTextarea();
+    updatePreview();
+    return;
+  }
+  if(action==='toggle-meta'){
+    const metaDiv = document.getElementById(`meta-${idx}`);
+    if(metaDiv) metaDiv.classList.toggle('visible');
+    return;
+  }
+  if(action==='edit'){
+    startInlineEdit(li,idx);
+    return;
+  }
+  if(action==='save-edit'){
+    const inp = li.querySelector('.song-edit-input');
+    const val = inp?inp.value.trim():'';
+    if(val) parsedSongs[idx].nome=val;
+    rebuildTextarea();
+    renderPreview();
+    return;
+  }
+  if(action==='cancel-edit'){
+    renderPreview();
+    return;
+  }
+});
+
+/* ---- save meta fields on change ---- */
+setlistPreview.addEventListener('change',e=>{
+  const inp = e.target.closest('[data-meta]');
+  if(!inp) return;
+  const idx  = parseInt(inp.dataset.index,10);
+  const meta = inp.dataset.meta;
+  if(parsedSongs[idx]) parsedSongs[idx][meta] = inp.value.trim();
+});
+
+function startInlineEdit(li,idx){
+  const cur = parsedSongs[idx].nome;
+  const mainRow = li.querySelector('.song-main');
+  const textSpan = mainRow.querySelector('.song-text');
+  textSpan.outerHTML=`<input class="song-edit-input" value="${escapeHtml(cur)}" aria-label="Editar música">`;
+  const actions = mainRow.querySelector('.song-actions');
+  actions.innerHTML=`
+    <button class="song-btn ok" data-action="save-edit" data-index="${idx}" title="Salvar">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+    </button>
+    <button class="song-btn" data-action="cancel-edit" data-index="${idx}" title="Cancelar">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>`;
+  const inp = mainRow.querySelector('.song-edit-input');
+  inp.focus(); inp.select();
+  inp.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter') mainRow.querySelector('[data-action=save-edit]').click();
+    if(ev.key==='Escape') mainRow.querySelector('[data-action=cancel-edit]').click();
+  });
+}
+
+function rebuildTextarea(){
+  inputLista.value = parsedSongs.map((s,i)=>`${i+1}. ${s.nome}`).join('\n');
+}
+
+/* ---- LIMPAR formulário (local only, não toca na planilha) ---- */
+btnLimparForm.addEventListener('click',()=>{
+  if(parsedSongs.length>0&&!confirm('Limpar o formulário?')) return;
+  inputLocal.value='';
+  inputData.valueAsDate=new Date();
+  inputLista.value='';
+  parsedSongs=[];
+  setStatus('','');
+  updatePreview();
+});
+
+/* ---- SALVAR ---- */
+btnSalvar.addEventListener('click',async()=>{
+  if(!isConfigured()){ setStatus('Configure a conexão (⚙) primeiro.','err'); openConfigModal(); return; }
+  const cfg = getConfig();
+  const payload = {
+    token:   cfg.token,
+    local:   inputLocal.value.trim(),
+    data:    inputData.value,
+    musicas: parsedSongs.map(s=>({ nome:s.nome, tom:s.tom, harmonia:s.harmonia, bpm:s.bpm })),
+  };
+  btnSalvar.disabled=true;
+  setStatus('Salvando na planilha…','busy');
+  try{
+    const res  = await fetch(cfg.url,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) });
+    const json = await res.json();
+    if(json.success) setStatus(`✓ ${json.salvos} músicas salvas.`,'ok');
+    else             setStatus(`Erro: ${json.error||'falha desconhecida'}`,'err');
+  }catch{ setStatus('Não foi possível conectar à planilha. Verifique internet e URL.','err'); }
+  finally{ btnSalvar.disabled=false; }
+});
+
+/* ---- PDF ---- */
+function gerarPDF(local, dataBR, songs){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4' });
+  const margin=48; let y=margin;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(26);
+  doc.text('Repertório',margin,y); y+=26;
+  doc.setFont('helvetica','normal'); doc.setFontSize(13); doc.setTextColor(90);
+  doc.text(`${local}  •  ${dataBR}`,margin,y); y+=28;
+  doc.setDrawColor(220); doc.line(margin,y,595-margin,y); y+=24;
+  doc.setTextColor(20);
+
+  songs.forEach((s,i)=>{
+    if(y>760){ doc.addPage(); y=margin; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(180,120,0);
+    doc.text(String(i+1)+'.',margin,y);
+    doc.setFont('helvetica','normal'); doc.setTextColor(20);
+    const nome = s.nome||s; // suporta string ou objeto
+    doc.text(nome,margin+28,y); y+=20;
+    const meta = [s.tom?`Tom: ${s.tom}`:'', s.harmonia?`Harm: ${s.harmonia}`:'', s.bpm?`${s.bpm} BPM`:''].filter(Boolean).join('   ');
+    if(meta){ doc.setFontSize(10); doc.setTextColor(140); doc.text(meta,margin+28,y); y+=14; doc.setFontSize(15); }
+    y+=8;
+  });
+
+  const safe=(local||'setlist').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  doc.save(`setlist-${safe}-${inputData.value||'show'}.pdf`);
+}
+
+btnPdf.addEventListener('click',()=>{ gerarPDF(inputLocal.value.trim(), formatDataBR(inputData.value), parsedSongs); });
+
+btnImprimir.addEventListener('click',()=>{
+  const pa = document.getElementById('printArea');
+  pa.innerHTML=`
+    <h1>Repertório</h1>
+    <div class="print-meta">${escapeHtml(inputLocal.value.trim())} • ${formatDataBR(inputData.value)}</div>
+    <ol>${parsedSongs.map(s=>`<li>${escapeHtml(s.nome)}${s.tom||s.harmonia||s.bpm?`<div class="print-meta-song">${[s.tom?'Tom: '+s.tom:'',s.harmonia?'Harm: '+s.harmonia:'',s.bpm?s.bpm+' BPM':''].filter(Boolean).join(' • ')}</div>`:''}` ).join('')}</ol>`;
+  window.print();
+});
+
+/* ---- APAGAR REPERTÓRIO (planilha) ---- */
+document.getElementById('btnApagarRepertorio').addEventListener('click',async()=>{
+  if(!isConfigured()){ alert('Configure a conexão (⚙) primeiro.'); return; }
+  if(!confirm('⚠ Apagar TODO o repertório da planilha?\n\nEsta ação não pode ser desfeita.')) return;
+  if(!confirm('Tem certeza? Todos os dados de músicas serão removidos da planilha.')) return;
+  const statusDanger = document.getElementById('statusDanger');
+  statusDanger.textContent='Apagando…'; statusDanger.className='status-msg busy';
+  const cfg=getConfig();
+  try{
+    const res  = await fetch(cfg.url,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({ token:cfg.token, action:'limpar_repertorio' }) });
+    const json = await res.json();
+    if(json.success){ statusDanger.textContent='✓ Repertório apagado.'; statusDanger.className='status-msg ok'; }
+    else            { statusDanger.textContent=`Erro: ${json.error||'falha'}`; statusDanger.className='status-msg err'; }
+  }catch{ statusDanger.textContent='Não foi possível conectar.'; statusDanger.className='status-msg err'; }
+});
+
+/* ============================================================
+   BUSCAR
+   ============================================================ */
+const inputBusca      = document.getElementById('inputBusca');
+const btnBuscar       = document.getElementById('btnBuscar');
+const btnLimparBusca  = document.getElementById('btnLimparBusca');
+const buscaResultados = document.getElementById('buscaResultados');
+
+inputBusca.addEventListener('input',()=>{ btnLimparBusca.hidden=inputBusca.value.length===0; });
+btnLimparBusca.addEventListener('click',()=>{
+  inputBusca.value=''; btnLimparBusca.hidden=true;
+  buscaResultados.innerHTML=''; inputBusca.focus();
+});
+
+async function buscarMusica(){
+  const termo=inputBusca.value.trim();
+  if(!termo) return;
+  if(!isConfigured()){ openConfigModal(); return; }
+  buscaResultados.innerHTML=`<p class="empty-state">Buscando…</p>`;
+  const cfg=getConfig();
+  try{
+    const res  = await fetch(`${cfg.url}?action=buscar&musica=${encodeURIComponent(termo)}&token=${encodeURIComponent(cfg.token)}`);
+    const json = await res.json();
+    if(!json.success){ buscaResultados.innerHTML=`<p class="empty-state">Erro: ${escapeHtml(json.error||'falha')}</p>`; return; }
+    if(json.resultados.length===0){ buscaResultados.innerHTML=`<p class="empty-state">Nenhuma ocorrência de "${escapeHtml(termo)}".</p>`; return; }
+    buscaResultados.innerHTML=json.resultados.map(r=>`
+      <div class="result-item">
+        <div class="result-item-header" style="cursor:default">
+          <div class="result-meta">
+            <div class="r-top"><span>${escapeHtml(r.local)}</span><span>${formatAnyDate(r.data)}</span></div>
+            <div class="r-song"><span class="r-order">#${r.ordem}</span>${escapeHtml(r.musica)}</div>
+            ${r.tom||r.harmonia||r.bpm?`<div class="show-song-meta">
+              ${r.tom?`<span class="meta-badge">🎵 ${escapeHtml(r.tom)}</span>`:''}
+              ${r.harmonia?`<span class="meta-badge">♭ ${escapeHtml(r.harmonia)}</span>`:''}
+              ${r.bpm?`<span class="meta-badge">♩ ${escapeHtml(r.bpm)} BPM</span>`:''}
+            </div>`:''}
+          </div>
+        </div>
+      </div>`).join('');
+  }catch{ buscaResultados.innerHTML=`<p class="empty-state">Não foi possível conectar à planilha.</p>`; }
+}
+btnBuscar.addEventListener('click',buscarMusica);
+inputBusca.addEventListener('keydown',e=>{ if(e.key==='Enter') buscarMusica(); });
+
+/* ============================================================
+   HISTÓRICO
+   ============================================================ */
+const historicoLista = document.getElementById('historicoLista');
+
+async function loadHistorico(){
+  if(!isConfigured()){ historicoLista.innerHTML=`<p class="empty-state">Configure a conexão (⚙) para ver o histórico.</p>`; return; }
+  historicoLista.innerHTML=`<p class="empty-state">Carregando…</p>`;
+  const cfg=getConfig();
+  try{
+    const res  = await fetch(`${cfg.url}?action=shows&token=${encodeURIComponent(cfg.token)}`);
+    const json = await res.json();
+    if(!json.success){ historicoLista.innerHTML=`<p class="empty-state">Erro: ${escapeHtml(json.error||'falha')}</p>`; return; }
+    if(json.shows.length===0){ historicoLista.innerHTML=`<p class="empty-state">Nenhum show registrado ainda.</p>`; return; }
+
+    historicoLista.innerHTML=json.shows.map((s,i)=>`
+      <div class="result-item" data-show-i="${i}" data-local="${escapeHtml(s.local)}" data-data="${escapeHtml(s.data)}">
+        <div class="result-item-header">
+          <div class="result-meta">
+            <div class="r-top"><span>${formatAnyDate(s.data)}</span><span class="r-qtd">${s.qtd} música${s.qtd===1?'':'s'}</span></div>
+            <div class="r-song">${escapeHtml(s.local)}</div>
+          </div>
+          <svg class="expand-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="show-detail">
+          <div class="show-detail-loading">Toque para carregar o setlist…</div>
+        </div>
+      </div>`).join('');
+
+    historicoLista.querySelectorAll('.result-item').forEach(item=>{
+      item.querySelector('.result-item-header').addEventListener('click',()=>toggleShowDetail(item));
+    });
+  }catch{ historicoLista.innerHTML=`<p class="empty-state">Não foi possível conectar à planilha.</p>`; }
+}
+
+async function toggleShowDetail(item){
+  const isOpen = item.classList.contains('open');
+  historicoLista.querySelectorAll('.result-item.open').forEach(el=>el.classList.remove('open'));
+  if(isOpen) return;
+  item.classList.add('open');
+  if(item.dataset.loaded==='true') return;
+
+  const detail  = item.querySelector('.show-detail');
+  const loading = item.querySelector('.show-detail-loading');
+  loading.textContent='Carregando…';
+
+  const local = item.dataset.local;
+  const data  = item.dataset.data;
+  if(!isConfigured()){ loading.textContent='Configure a conexão (⚙) primeiro.'; return; }
+
+  const cfg=getConfig();
+  try{
+    const res  = await fetch(`${cfg.url}?action=setlist&local=${encodeURIComponent(local)}&data=${encodeURIComponent(data)}&token=${encodeURIComponent(cfg.token)}`);
+    const json = await res.json();
+    if(!json.success||!json.musicas){ loading.textContent=`Erro: ${json.error||'O Code.gs precisa ser reimplantado com a versão mais recente.'}`; return; }
+    if(json.musicas.length===0){ loading.textContent='Nenhuma música encontrada para este show.'; return; }
+
+    item.dataset.loaded='true';
+    const songsData = json.musicas; // array of { nome, tom, harmonia, bpm }
+
+    detail.innerHTML=`
+      <ol class="show-songs">
+        ${songsData.map(m=>{
+          const nome = typeof m==='string'?m:(m.nome||'');
+          const badges=[
+            m.tom      ?`<span class="meta-badge">🎵 ${escapeHtml(m.tom)}</span>`:'',
+            m.harmonia ?`<span class="meta-badge">♭ ${escapeHtml(m.harmonia)}</span>`:'',
+            m.bpm      ?`<span class="meta-badge">♩ ${escapeHtml(m.bpm)} BPM</span>`:'',
+          ].join('');
+          return `<li>
+            <div class="show-song-name">${escapeHtml(nome)}</div>
+            ${badges?`<div class="show-song-meta">${badges}</div>`:''}
+          </li>`;
+        }).join('')}
+      </ol>
+      <div class="show-detail-actions">
+        <button class="btn btn-secondary" id="btnReuse-${item.dataset.showI}">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          Reutilizar
+        </button>
+        <button class="btn btn-secondary" id="btnPdfShow-${item.dataset.showI}">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          PDF
+        </button>
+      </div>`;
+
+    detail.querySelector(`#btnReuse-${item.dataset.showI}`).addEventListener('click',()=>{
+      inputLocal.value=local;
+      inputData.value=data;
+      parsedSongs=songsData.map(m=>typeof m==='string'?songObj(m):{nome:m.nome||'',tom:m.tom||'',harmonia:m.harmonia||'',bpm:m.bpm||''});
+      rebuildTextarea();
+      updatePreview();
+      setStatus('Setlist carregado do histórico — edite se precisar.','ok');
+      tabs[0].click();
+    });
+    detail.querySelector(`#btnPdfShow-${item.dataset.showI}`).addEventListener('click',()=>{
+      gerarPDF(local, formatAnyDate(data), songsData);
+    });
+
+  }catch(err){
+    loading.textContent=`Erro ao carregar: ${err.message||'verifique o Code.gs'}`;
+  }
+}
+
+document.getElementById('btnRefreshHistorico').addEventListener('click',()=>{
+  historicoLista.innerHTML='';
+  loadHistorico();
+});
+
+/* ---- APAGAR HISTÓRICO (só aba Shows) ---- */
+document.getElementById('btnApagarHistorico').addEventListener('click',async()=>{
+  if(!isConfigured()){ alert('Configure a conexão (⚙) primeiro.'); return; }
+  if(!confirm('⚠ Apagar TODO o histórico de shows?\n\nO banco de músicas (Repertório) não será afetado.')) return;
+  const statusH = document.getElementById('statusHistoricoDanger');
+  statusH.textContent='Apagando…'; statusH.className='status-msg busy';
+  const cfg=getConfig();
+  try{
+    const res  = await fetch(cfg.url,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({ token:cfg.token, action:'limpar_historico' }) });
+    const json = await res.json();
+    if(json.success){
+      statusH.textContent='✓ Histórico apagado.'; statusH.className='status-msg ok';
+      historicoLista.innerHTML=`<p class="empty-state">Nenhum show registrado ainda.</p>`;
+    }else{
+      statusH.textContent=`Erro: ${json.error||'falha'}`; statusH.className='status-msg err';
+    }
+  }catch{ statusH.textContent='Não foi possível conectar.'; statusH.className='status-msg err'; }
+});
+
+/* ============================================================
+   CONFIG MODAL
+   ============================================================ */
+const modalConfig  = document.getElementById('modalConfig');
+const cfgUrl       = document.getElementById('cfgUrl');
+const cfgToken     = document.getElementById('cfgToken');
+const cfgStatusMsg = document.getElementById('cfgStatusMsg');
+
+function openConfigModal(){
+  const cfg=getConfig();
+  cfgUrl.value=cfg.url||''; cfgToken.value=cfg.token||'';
+  cfgStatusMsg.textContent=''; modalConfig.hidden=false;
+}
+function closeConfigModal(){ modalConfig.hidden=true; }
+
+document.getElementById('btnConfig').addEventListener('click',openConfigModal);
+document.getElementById('btnCfgFechar').addEventListener('click',closeConfigModal);
+modalConfig.addEventListener('click',e=>{ if(e.target===modalConfig) closeConfigModal(); });
+document.getElementById('btnCfgSalvar').addEventListener('click',()=>{
+  const url=cfgUrl.value.trim(), token=cfgToken.value.trim();
+  if(!url||!token){ cfgStatusMsg.textContent='Preencha a URL e o token.'; cfgStatusMsg.className='status-msg err'; return; }
+  setConfig({url,token});
+  cfgStatusMsg.textContent='✓ Conexão salva neste dispositivo.'; cfgStatusMsg.className='status-msg ok';
+  updatePreview();
+  setTimeout(closeConfigModal,900);
+});
+
+/* ============================================================
+   SERVICE WORKER
+   ============================================================ */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+
+if(!isConfigured()) setTimeout(()=>setStatus('Configure a conexão com sua planilha (ícone ⚙).'),'');
+updatePreview();
